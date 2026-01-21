@@ -1,0 +1,36 @@
+[theme]
+# Primary brand color
+primaryColor = "#1f77b4"
+
+# Background color for the main content area
+backgroundColor = "#ffffff"
+
+# Background color for sidebar
+secondaryBackgroundColor = "#f0f2f6"
+
+# Text color
+textColor = "#262730"
+
+# Font
+font = "sans serif"
+
+[server]
+# Enable file watcher for hot reload (development only)
+fileWatcherType = "auto"
+
+# Max upload size (MB)
+maxUploadSize = 200
+
+# Enable CORS
+enableCORS = false
+
+# Enable XSRF protection
+enableXsrfProtection = true
+
+[browser]
+# Automatically open browser on startup (local only)
+gatherUsageStats = false
+
+[runner]
+# Allow reruns when source file changes
+fastReruns = true

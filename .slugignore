@@ -1,0 +1,55 @@
+# Files to exclude from Railway deployment
+# This reduces build size and speeds up deployment
+
+# Logs and temporary files
+logs/
+*.log
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment and secrets
+venv/
+env/
+.env
+.env.local
+
+# Git files
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+STREAMLIT_DEPLOYMENT_PROMPT.md
+COMMANDS_REFERENCE.md
+CONTINUATION_PROMPT.md
+
+# Development scripts (terminal-based, not needed for web deployment)
+control_center.py
+view_topics.py
+main.py
+migration_*.py
+
+# IDE and system files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+test/
+tests/
+*_test.py
+test_*.py
+
+# Database (will be on persistent volume)
+data/pipeline.db
+data/test_pipeline.db
+
+# Output files (will be regenerated)
+output/
