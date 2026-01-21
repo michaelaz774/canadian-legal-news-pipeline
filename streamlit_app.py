@@ -32,6 +32,13 @@ if not check_password():
     st.stop()
 
 # ============================================================================
+# SESSION STATE - REFRESH TRIGGER
+# ============================================================================
+# Initialize refresh trigger to force sidebar stats to update
+if 'refresh_trigger' not in st.session_state:
+    st.session_state.refresh_trigger = 0
+
+# ============================================================================
 # SIDEBAR - DATABASE STATS
 # ============================================================================
 st.sidebar.title("⚖️ Legal News Pipeline")
@@ -39,6 +46,9 @@ st.sidebar.markdown("---")
 
 # Get database statistics
 try:
+    # Force evaluation by referencing trigger (ensures sidebar updates on page actions)
+    trigger = st.session_state.refresh_trigger
+
     db = Database()
     stats = db.get_stats()
 
@@ -95,6 +105,9 @@ st.markdown("### 📈 System Overview")
 col1, col2, col3, col4 = st.columns(4)
 
 try:
+    # Force evaluation by referencing trigger (ensures main dashboard updates on page actions)
+    trigger = st.session_state.refresh_trigger
+
     db = Database()
     stats = db.get_stats()
 
@@ -193,6 +206,9 @@ st.markdown("---")
 st.markdown("### 📋 Recent Activity")
 
 try:
+    # Force evaluation by referencing trigger (ensures recent activity updates on page actions)
+    trigger = st.session_state.refresh_trigger
+
     db = Database()
 
     # Get recent topics with metadata

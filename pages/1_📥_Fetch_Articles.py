@@ -126,7 +126,9 @@ if st.button("🔄 Fetch Articles Now", type="primary", use_container_width=True
         if fetch_stats['inserted'] > 0:
             st.success("📊 Database updated! Refreshing stats...")
             st.balloons()
-            time.sleep(2)  # Brief pause to show success message
+            # Increment refresh trigger to force sidebar update
+            st.session_state.refresh_trigger += 1
+            time.sleep(1)  # Brief pause to show success message
             st.rerun()  # Auto-refresh to show updated stats
         else:
             st.info("No new articles found. All sources are up to date.")

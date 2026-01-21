@@ -199,7 +199,9 @@ try:
 
                 st.success("📊 Database updated! Refreshing stats...")
                 st.balloons()
-                time.sleep(2)  # Brief pause to show success message
+                # Increment refresh trigger to force sidebar update
+                st.session_state.refresh_trigger += 1
+                time.sleep(1)  # Brief pause to show success message
                 st.rerun()  # Auto-refresh to show updated stats
 
 except Exception as e:
