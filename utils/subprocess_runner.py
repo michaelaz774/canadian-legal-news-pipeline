@@ -83,7 +83,7 @@ def run_pipeline_script_streaming(
     timeout: int = 600
 ) -> Tuple[bool, str, str]:
     """
-    Run a pipeline script with progress indication.
+    Run a pipeline script with real-time output streaming.
 
     Args:
         script_name: Name of script (e.g., "fetch.py")
@@ -118,61 +118,77 @@ def run_pipeline_script_streaming(
     else:
         estimated_time = "a few minutes"
 
-    # Show helpful spinner message
-    with st.spinner(f"⏳ Running {script_name}... This typically takes {estimated_time}. Please wait."):
-        try:
-            # Run the script and capture output
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                env=env
-            )
+    st.info(f"⏳ Running {script_name}... This typically takes {estimated_time}.")
+    st.markdown("---")
 
-            stdout = result.stdout
-            stderr = result.stderr
-            success = result.returncode == 0
+    # Create a container for real-time output
+    output_container = st.container()
 
-        except subprocess.TimeoutExpired:
-            st.error(f"⏱️ Process timed out after {timeout} seconds")
-            return False, "", f"Script timed out after {timeout} seconds"
-        except Exception as e:
-            st.error(f"❌ Error running script: {str(e)}")
-            return False, "", str(e)
+    stdout_lines = []
+    stderr_lines = []
+
+    try:
+        # Start the process with Popen for real-time output
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,  # Line buffered
+            env=env
+        )
+
+        # Read output in real-time
+        import time as time_module
+
+        start_time = time_module.time()
+
+        while True:
+            # Check for timeout
+            if time_module.time() - start_time > timeout:
+                process.kill()
+                st.error(f"⏱️ Process timed out after {timeout} seconds")
+                return False, "\n".join(stdout_lines), f"Script timed out after {timeout} seconds"
+
+            # Read stdout line by line
+            line = process.stdout.readline()
+            if line:
+                line = line.rstrip()
+                stdout_lines.append(line)
+                # Display the line in real-time
+                with output_container:
+                    st.text(line)
+
+            # Check if process has finished
+            if process.poll() is not None:
+                # Read any remaining output
+                for line in process.stdout:
+                    line = line.rstrip()
+                    stdout_lines.append(line)
+                    with output_container:
+                        st.text(line)
+                break
+
+            # Small sleep to prevent CPU spinning
+            time_module.sleep(0.1)
+
+        # Capture any stderr
+        stderr_output = process.stderr.read()
+        if stderr_output:
+            stderr_lines = stderr_output.strip().split('\n')
+
+        stdout = "\n".join(stdout_lines)
+        stderr = "\n".join(stderr_lines)
+        success = process.returncode == 0
+
+    except Exception as e:
+        st.error(f"❌ Error running script: {str(e)}")
+        return False, "\n".join(stdout_lines), str(e)
 
     # Show results after completion
+    st.markdown("---")
     if success:
         st.success("✅ Completed successfully!")
-
-        # Parse and display summary
-        if stdout:
-            lines = stdout.split('\n')
-
-            # Extract key information
-            progress_info = {}
-            for line in lines:
-                info = parse_progress_line(line)
-                if info:
-                    progress_info.update(info)
-
-            # Show summary metrics
-            if 'current' in progress_info and 'total' in progress_info:
-                st.info(f"📊 Processed {progress_info['current']} of {progress_info['total']} items")
-
-            # Count successes and errors
-            success_count = sum(1 for line in lines if '✓' in line or 'success' in line.lower())
-            error_count = sum(1 for line in lines if '✗' in line or 'ERROR' in line or 'Failed' in line)
-
-            if success_count > 0 or error_count > 0:
-                col1, col2 = st.columns(2)
-                with col1:
-                    if success_count > 0:
-                        st.metric("Successes", success_count)
-                with col2:
-                    if error_count > 0:
-                        st.metric("Errors", error_count)
-
     else:
         st.error("❌ Process failed!")
         if stderr:
@@ -180,9 +196,9 @@ def run_pipeline_script_streaming(
             with st.expander("Error Log", expanded=True):
                 st.code(stderr, language="text")
 
-    # Show full output in expanders
+    # Show full output in expander for reference
     if stdout:
-        with st.expander("📄 Full Output Log", expanded=False):
+        with st.expander("📄 Full Output Log (Click to expand)", expanded=False):
             st.code(stdout, language="text")
 
     if stderr and success:
