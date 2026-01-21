@@ -101,6 +101,10 @@ from database import Database
 # LOAD ENVIRONMENT VARIABLES
 load_dotenv()
 
+# ENSURE LOGS DIRECTORY EXISTS
+# Create logs directory before setting up logging to avoid FileNotFoundError
+os.makedirs('logs', exist_ok=True)
+
 # CONFIGURE LOGGING
 logging.basicConfig(
     level=logging.INFO,

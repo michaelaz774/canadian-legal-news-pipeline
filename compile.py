@@ -108,6 +108,10 @@ from database import Database
 # This reads the .env file and makes variables available via os.environ
 load_dotenv()
 
+# ENSURE LOGS DIRECTORY EXISTS
+# Create logs directory before setting up logging to avoid FileNotFoundError
+os.makedirs('logs', exist_ok=True)
+
 # CONFIGURE LOGGING
 # Set up logging to both file and console for comprehensive debugging
 logging.basicConfig(
