@@ -6,6 +6,7 @@ Triggers article fetching from Canadian legal news sources
 import streamlit as st
 import sys
 import os
+import time
 from database import Database
 from utils.subprocess_runner import run_pipeline_script_streaming, parse_fetch_output
 from utils.auth import check_password
@@ -121,10 +122,14 @@ if st.button("🔄 Fetch Articles Now", type="primary", use_container_width=True
                     help="Articles already in database"
                 )
 
-        # Refresh page to show updated stats
+        # Show success message and auto-refresh
         if fetch_stats['inserted'] > 0:
-            st.info("📊 Database stats updated! Refresh the page to see the latest numbers.")
+            st.success("📊 Database updated! Refreshing stats...")
             st.balloons()
+            time.sleep(2)  # Brief pause to show success message
+            st.rerun()  # Auto-refresh to show updated stats
+        else:
+            st.info("No new articles found. All sources are up to date.")
 
 st.markdown("---")
 

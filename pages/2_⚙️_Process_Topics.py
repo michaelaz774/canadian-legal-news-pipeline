@@ -4,6 +4,7 @@ Extracts topics from unprocessed articles using Gemini AI
 """
 
 import streamlit as st
+import time
 from database import Database
 from utils.subprocess_runner import run_pipeline_script_streaming, parse_compile_output
 from utils.auth import check_password
@@ -196,8 +197,10 @@ try:
                             help="New unique topics added to database"
                         )
 
-                st.info("📊 Database stats updated! Refresh the page to see the latest numbers.")
+                st.success("📊 Database updated! Refreshing stats...")
                 st.balloons()
+                time.sleep(2)  # Brief pause to show success message
+                st.rerun()  # Auto-refresh to show updated stats
 
 except Exception as e:
     st.error(f"Error: {e}")
