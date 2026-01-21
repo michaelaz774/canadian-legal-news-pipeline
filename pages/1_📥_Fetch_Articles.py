@@ -17,6 +17,10 @@ st.set_page_config(page_title="Fetch Articles", page_icon="📥", layout="wide")
 if not check_password():
     st.stop()
 
+# Initialize refresh trigger if not exists
+if 'refresh_trigger' not in st.session_state:
+    st.session_state.refresh_trigger = 0
+
 st.title("📥 Fetch Articles")
 st.markdown("Scrape new articles from Canadian legal news sources")
 
