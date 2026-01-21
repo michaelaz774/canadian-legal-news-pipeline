@@ -132,7 +132,10 @@ class Database:
                 category TEXT,
                 key_entity TEXT,
                 smb_relevance_score INTEGER,
-                created_date TEXT NOT NULL
+                parent_topic_id INTEGER,
+                is_parent INTEGER DEFAULT 0,
+                created_date TEXT NOT NULL,
+                FOREIGN KEY (parent_topic_id) REFERENCES topics(id)
             )
         """)
         # EXPLANATION OF COLUMNS:
@@ -152,6 +155,7 @@ class Database:
             CREATE TABLE IF NOT EXISTS article_topics (
                 article_id INTEGER NOT NULL,
                 topic_id INTEGER NOT NULL,
+                article_tag TEXT,
                 created_date TEXT NOT NULL,
                 PRIMARY KEY (article_id, topic_id),
                 FOREIGN KEY (article_id) REFERENCES articles(id),
@@ -171,8 +175,81 @@ class Database:
         # Query: "Show me all articles about Smith v. Jones" → Returns articles 1 and 2
         # Query: "Show me all topics in article 2" → Returns "Smith v. Jones" and "Bill C-27"
 
+        # ============ GENERATED_ARTICLES TABLE ============
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS generated_articles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic_id INTEGER NOT NULL,
+                generated_date TEXT NOT NULL,
+                output_file TEXT NOT NULL,
+                model_used TEXT NOT NULL,
+                source_article_count INTEGER,
+                word_count INTEGER,
+                FOREIGN KEY (topic_id) REFERENCES topics(id)
+            )
+        """)
+        # EXPLANATION:
+        # - Tracks which topics have been generated into articles
+        # - Prevents duplicate generation of the same topic
+        # - Records metadata about the generation process
+
         self.conn.commit()
         logger.debug("Database tables created/verified")
+
+        # Run migrations to add any missing columns
+        self._run_migrations()
+
+    def _run_migrations(self):
+        """
+        Run database migrations to add missing columns to existing tables.
+
+        WHY THIS EXISTS:
+        - Production databases may have been created with older schemas
+        - This ensures all required columns exist without dropping/recreating tables
+        - Safe to run multiple times (checks if column exists before adding)
+        """
+        cursor = self.conn.cursor()
+
+        # Check if topics table has parent_topic_id and is_parent columns
+        cursor.execute("PRAGMA table_info(topics)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        # Add parent_topic_id if missing
+        if 'parent_topic_id' not in columns:
+            msg = "Adding parent_topic_id column to topics table..."
+            logger.info(msg)
+            print(msg, flush=True)
+            cursor.execute("ALTER TABLE topics ADD COLUMN parent_topic_id INTEGER")
+            self.conn.commit()
+            msg = "✓ Added parent_topic_id column"
+            logger.info(msg)
+            print(msg, flush=True)
+
+        # Add is_parent if missing
+        if 'is_parent' not in columns:
+            msg = "Adding is_parent column to topics table..."
+            logger.info(msg)
+            print(msg, flush=True)
+            cursor.execute("ALTER TABLE topics ADD COLUMN is_parent INTEGER DEFAULT 0")
+            self.conn.commit()
+            msg = "✓ Added is_parent column"
+            logger.info(msg)
+            print(msg, flush=True)
+
+        # Check if article_topics table has article_tag column
+        cursor.execute("PRAGMA table_info(article_topics)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        # Add article_tag if missing
+        if 'article_tag' not in columns:
+            msg = "Adding article_tag column to article_topics table..."
+            logger.info(msg)
+            print(msg, flush=True)
+            cursor.execute("ALTER TABLE article_topics ADD COLUMN article_tag TEXT")
+            self.conn.commit()
+            msg = "✓ Added article_tag column"
+            logger.info(msg)
+            print(msg, flush=True)
 
     # ============================================================================
     # ARTICLE OPERATIONS
