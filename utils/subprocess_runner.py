@@ -39,6 +39,14 @@ def run_pipeline_script(
     if args:
         cmd.extend(args)
 
+    # Pass Streamlit secrets as environment variables
+    import os
+    env = os.environ.copy()
+    if hasattr(st, 'secrets'):
+        for key, value in st.secrets.items():
+            if isinstance(value, str):
+                env[key] = value
+
     try:
         # Run the script and capture output
         result = subprocess.run(
@@ -46,7 +54,8 @@ def run_pipeline_script(
             capture_output=True,
             text=True,
             timeout=timeout,
-            cwd=None  # Use current working directory
+            cwd=None,  # Use current working directory
+            env=env  # Pass environment variables including secrets
         )
 
         success = result.returncode == 0
