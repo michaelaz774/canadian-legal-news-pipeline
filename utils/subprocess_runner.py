@@ -102,14 +102,18 @@ def run_pipeline_script_streaming(
         - Error highlighting
         - Timeout handling
     """
-    # Build command
-    cmd = [sys.executable, script_name]
+    # Build command with unbuffered output for real-time streaming
+    cmd = [sys.executable, '-u', script_name]
     if args:
         cmd.extend(args)
 
     # Pass Streamlit secrets as environment variables
     import os
     env = os.environ.copy()
+
+    # Force unbuffered output
+    env['PYTHONUNBUFFERED'] = '1'
+
     if hasattr(st, 'secrets'):
         for key, value in st.secrets.items():
             if isinstance(value, str):
