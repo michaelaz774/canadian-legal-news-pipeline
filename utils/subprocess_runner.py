@@ -1,6 +1,7 @@
 """
 Subprocess execution utilities for Streamlit web interface
-Provides safe execution of pipeline scripts with error handling
+Provides safe execution of pipeline scripts with error handling and real-time streaming.
+Updated: 2026-01-21
 """
 
 import subprocess
