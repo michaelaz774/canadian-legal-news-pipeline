@@ -501,7 +501,9 @@ def get_unprocessed_articles(db: Database) -> List[Dict]:
     # This returns articles where processed=0
     articles = db.get_unprocessed_articles()
 
-    logger.info(f"Found {len(articles)} unprocessed articles")
+    msg = f"Found {len(articles)} unprocessed articles"
+    logger.info(msg)
+    print(msg, flush=True)
     return articles
 
 
@@ -617,6 +619,9 @@ def process_articles():
     logger.info("=" * 80)
     logger.info("STARTING TOPIC EXTRACTION PROCESS")
     logger.info("=" * 80)
+    print("=" * 80, flush=True)
+    print("STARTING TOPIC EXTRACTION PROCESS", flush=True)
+    print("=" * 80, flush=True)
 
     # INITIALIZE DATABASE CONNECTION
     db = Database()
@@ -625,17 +630,23 @@ def process_articles():
     try:
         client = initialize_gemini_client()
     except ValueError as e:
-        logger.error(f"Failed to initialize Gemini client: {e}")
+        error_msg = f"Failed to initialize Gemini client: {e}"
+        logger.error(error_msg)
+        print(error_msg, flush=True)
         return
 
     # FETCH UNPROCESSED ARTICLES
     articles = get_unprocessed_articles(db)
 
     if not articles:
-        logger.info("No unprocessed articles found. All articles have topics assigned!")
+        msg = "No unprocessed articles found. All articles have topics assigned!"
+        logger.info(msg)
+        print(msg, flush=True)
         return
 
-    logger.info(f"Processing {len(articles)} articles...")
+    msg = f"Processing {len(articles)} articles..."
+    logger.info(msg)
+    print(msg, flush=True)
 
     # TRACKING STATISTICS
     successful = 0
@@ -645,7 +656,7 @@ def process_articles():
     # tqdm creates a progress bar that updates on each iteration
     # desc= sets the description shown before the progress bar
     # unit= sets the unit name (e.g., "article")
-    for article in tqdm(articles, desc="Extracting topics", unit="article"):
+    for idx, article in enumerate(articles, 1):
         # EXTRACT ARTICLE DATA FROM DICTIONARY
         # Database methods return dictionaries, not tuples
         article_id = article['id']
@@ -655,7 +666,10 @@ def process_articles():
         try:
             # EXTRACT TOPICS WITH AI
             # This automatically retries on rate limits/service issues
-            logger.info(f"Processing: {title}")
+            progress_msg = f"[{idx}/{len(articles)}] Processing: {title}"
+            logger.info(progress_msg)
+            print(progress_msg, flush=True)  # Immediate output for Streamlit
+
             topics_data = extract_topics_from_article(client, title, content)
 
             # STORE IN DATABASE
@@ -663,13 +677,17 @@ def process_articles():
 
             # LOG SUCCESS
             topic_names = [f"{t.parent_topic} > {t.subtopic} [{t.article_tag}]" for t in topics_data.topics]
-            logger.info(f"✓ Extracted topics: {', '.join(topic_names)}")
+            success_msg = f"✓ Extracted topics: {', '.join(topic_names)}"
+            logger.info(success_msg)
+            print(success_msg, flush=True)  # Immediate output for Streamlit
             successful += 1
 
         except Exception as e:
             # LOG ERROR BUT CONTINUE PROCESSING
             # We don't want one bad article to stop the entire batch
-            logger.error(f"✗ Failed to process article {article_id} ('{title}'): {e}")
+            error_msg = f"✗ Failed to process article {article_id} ('{title}'): {e}"
+            logger.error(error_msg)
+            print(error_msg, flush=True)  # Immediate output for Streamlit
             failed += 1
             continue
 
@@ -681,8 +699,17 @@ def process_articles():
     logger.info(f"Successful: {successful}")
     logger.info(f"Failed: {failed}")
 
+    print("\n" + "=" * 80, flush=True)
+    print("TOPIC EXTRACTION COMPLETE", flush=True)
+    print("=" * 80, flush=True)
+    print(f"Total articles processed: {len(articles)}", flush=True)
+    print(f"Successful: {successful}", flush=True)
+    print(f"Failed: {failed}", flush=True)
+
     if failed > 0:
-        logger.warning(f"{failed} articles failed. They will be retried on next run.")
+        warning_msg = f"{failed} articles failed. They will be retried on next run."
+        logger.warning(warning_msg)
+        print(warning_msg, flush=True)
 
     # CLOSE DATABASE CONNECTION
     db.close()
