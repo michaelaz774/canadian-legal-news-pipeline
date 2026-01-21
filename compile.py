@@ -196,8 +196,8 @@ class TopicExtraction(BaseModel):
     """
     topics: List[Topic] = Field(
         description="List of 1-3 primary topics identified in the legal article",
-        min_items=1,
-        max_items=3
+        min_length=1,
+        max_length=3
     )
     summary: str = Field(
         description="One-sentence summary of the article's main focus"
