@@ -83,9 +83,9 @@ def run_pipeline_script_streaming(
     timeout: int = 600
 ) -> Tuple[bool, str, str]:
     """
-    Run a pipeline script with real-time streaming output for better observability.
+    Run a pipeline script with better observability using st.status().
 
-    Shows live progress updates in the Streamlit UI as the script executes.
+    Shows progress updates in the Streamlit UI as the script executes.
 
     Args:
         script_name: Name of script (e.g., "fetch.py")
@@ -94,15 +94,8 @@ def run_pipeline_script_streaming(
 
     Returns:
         Tuple of (success: bool, stdout: str, stderr: str)
-
-    Features:
-        - Real-time output streaming
-        - Progress tracking with status indicators
-        - Live log display
-        - Error highlighting
-        - Timeout handling
     """
-    # Build command with unbuffered output for real-time streaming
+    # Build command with unbuffered output
     cmd = [sys.executable, '-u', script_name]
     if args:
         cmd.extend(args)
@@ -110,8 +103,6 @@ def run_pipeline_script_streaming(
     # Pass Streamlit secrets as environment variables
     import os
     env = os.environ.copy()
-
-    # Force unbuffered output
     env['PYTHONUNBUFFERED'] = '1'
 
     if hasattr(st, 'secrets'):
@@ -119,125 +110,75 @@ def run_pipeline_script_streaming(
             if isinstance(value, str):
                 env[key] = value
 
-    # Create containers for live updates
-    status_container = st.container()
-    progress_container = st.container()
-    log_container = st.container()
+    # Use st.status for better UX
+    with st.status("Running pipeline...", expanded=True) as status:
+        try:
+            # Run the script and capture output
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env
+            )
 
-    stdout_lines = []
-    stderr_lines = []
+            stdout = result.stdout
+            stderr = result.stderr
+            success = result.returncode == 0
 
-    try:
-        # Start process with pipes for real-time output
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,  # Line buffered
-            env=env,
-            universal_newlines=True
-        )
+            # Parse and display progress
+            if stdout:
+                lines = stdout.split('\n')
 
-        start_time = time.time()
+                # Extract key information
+                progress_info = {}
+                for line in lines:
+                    info = parse_progress_line(line)
+                    if info:
+                        progress_info.update(info)
 
-        # Progress tracking variables
-        current_status = "Starting..."
-        articles_processed = 0
-        total_articles = 0
-        errors_count = 0
+                # Show progress if available
+                if 'current' in progress_info and 'total' in progress_info:
+                    st.write(f"Processed {progress_info['current']} of {progress_info['total']} items")
 
-        # Create status display
-        with status_container:
-            status_text = st.empty()
-            status_text.info(f"⚙️ {current_status}")
+                # Show recent activity (last 10 lines with content)
+                recent_lines = [l for l in lines[-15:] if l.strip()]
+                if recent_lines:
+                    st.text("Recent activity:")
+                    for line in recent_lines[-10:]:
+                        if '✓' in line or 'success' in line.lower():
+                            st.success(line[:100])
+                        elif '✗' in line or 'ERROR' in line or 'Failed' in line:
+                            st.error(line[:100])
+                        else:
+                            st.text(line[:100])
 
-        # Create progress bar (initially hidden)
-        with progress_container:
-            progress_bar = st.empty()
-            progress_text = st.empty()
-
-        # Create live log display
-        with log_container:
-            st.markdown("### 📋 Live Output")
-            log_display = st.empty()
-
-        # Read output in real-time
-        while True:
-            # Check timeout
-            if time.time() - start_time > timeout:
-                process.kill()
-                return False, '\n'.join(stdout_lines), "Process timed out"
-
-            # Read stdout line
-            line = process.stdout.readline()
-
-            if line:
-                stdout_lines.append(line.rstrip())
-
-                # Parse progress indicators
-                progress_info = parse_progress_line(line)
-                if progress_info:
-                    if 'status' in progress_info:
-                        current_status = progress_info['status']
-                        status_text.info(f"⚙️ {current_status}")
-
-                    if 'current' in progress_info and 'total' in progress_info:
-                        articles_processed = progress_info['current']
-                        total_articles = progress_info['total']
-
-                        # Update progress bar
-                        if total_articles > 0:
-                            progress_pct = articles_processed / total_articles
-                            progress_bar.progress(progress_pct)
-                            progress_text.text(f"Progress: {articles_processed}/{total_articles} ({progress_pct*100:.0f}%)")
-
-                    if 'error' in progress_info:
-                        errors_count += 1
-
-                # Update log display (last 20 lines)
-                recent_logs = stdout_lines[-20:]
-                log_text = format_log_lines(recent_logs)
-                log_display.code(log_text, language="text")
-
-            # Check if process finished
-            if process.poll() is not None:
-                break
-
-        # Read any remaining output
-        remaining_out, remaining_err = process.communicate()
-        if remaining_out:
-            stdout_lines.extend(remaining_out.splitlines())
-        if remaining_err:
-            stderr_lines.extend(remaining_err.splitlines())
-
-        # Final status update
-        success = process.returncode == 0
-
-        with status_container:
+            # Update final status
             if success:
-                status_text.success(f"✅ Completed successfully! ({len(stdout_lines)} lines processed)")
-                if errors_count > 0:
-                    st.warning(f"⚠️ Completed with {errors_count} errors")
+                status.update(label="✅ Completed successfully!", state="complete")
             else:
-                status_text.error(f"❌ Failed with return code {process.returncode}")
+                status.update(label="❌ Process failed", state="error")
+                if stderr:
+                    st.error("Error details:")
+                    st.code(stderr[:500], language="text")
 
-        # Show full output in expander
-        if stdout_lines:
-            with st.expander("📄 Full Output Log", expanded=False):
-                st.code('\n'.join(stdout_lines), language="text")
+        except subprocess.TimeoutExpired:
+            status.update(label="⏱️ Process timed out", state="error")
+            return False, "", f"Script timed out after {timeout} seconds"
+        except Exception as e:
+            status.update(label=f"❌ Error: {str(e)}", state="error")
+            return False, "", str(e)
 
-        if stderr_lines:
-            with st.expander("⚠️ Error Log", expanded=True):
-                st.code('\n'.join(stderr_lines), language="text")
+    # Show full output in expanders
+    if stdout:
+        with st.expander("📄 Full Output Log", expanded=False):
+            st.code(stdout, language="text")
 
-        return success, '\n'.join(stdout_lines), '\n'.join(stderr_lines)
+    if stderr:
+        with st.expander("⚠️ Error Log", expanded=False):
+            st.code(stderr, language="text")
 
-    except Exception as e:
-        error_msg = f"Error running script: {str(e)}"
-        with status_container:
-            st.error(f"❌ {error_msg}")
-        return False, '\n'.join(stdout_lines), error_msg
+    return success, stdout, stderr
 
 
 def parse_progress_line(line: str) -> Optional[Dict[str, Any]]:
