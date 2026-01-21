@@ -7,7 +7,7 @@ import streamlit as st
 import sys
 import os
 from database import Database
-from utils.subprocess_runner import run_pipeline_script, display_script_output, parse_fetch_output
+from utils.subprocess_runner import run_pipeline_script_streaming, parse_fetch_output
 from utils.auth import check_password
 
 st.set_page_config(page_title="Fetch Articles", page_icon="📥", layout="wide")
@@ -90,45 +90,41 @@ Click the button below to fetch new articles. This process:
 """)
 
 if st.button("🔄 Fetch Articles Now", type="primary", use_container_width=True):
-    with st.spinner("Fetching articles from sources... This may take up to 1 minute."):
-        # Run fetch.py
-        success, stdout, stderr = run_pipeline_script("fetch.py", timeout=300)
+    st.markdown("### 🔄 Fetching Articles")
+    st.markdown("Watch the live progress below.")
+    st.markdown("---")
 
-        if success:
-            st.success("✅ Fetch completed successfully!")
+    # Run fetch.py with real-time streaming output
+    success, stdout, stderr = run_pipeline_script_streaming("fetch.py", timeout=300)
 
-            # Parse output to show statistics
-            fetch_stats = parse_fetch_output(stdout)
+    if success:
+        st.markdown("---")
 
-            if fetch_stats['inserted'] > 0 or fetch_stats['skipped'] > 0:
-                col_inserted, col_skipped = st.columns(2)
+        # Parse output to show statistics
+        fetch_stats = parse_fetch_output(stdout)
 
-                with col_inserted:
-                    st.metric(
-                        "New Articles Inserted",
-                        fetch_stats['inserted'],
-                        help="New articles added to database"
-                    )
+        if fetch_stats['inserted'] > 0 or fetch_stats['skipped'] > 0:
+            st.markdown("### 📊 Fetch Results")
+            col_inserted, col_skipped = st.columns(2)
 
-                with col_skipped:
-                    st.metric(
-                        "Duplicates Skipped",
-                        fetch_stats['skipped'],
-                        help="Articles already in database"
-                    )
+            with col_inserted:
+                st.metric(
+                    "New Articles Inserted",
+                    fetch_stats['inserted'],
+                    help="New articles added to database"
+                )
 
-            # Display full output
-            display_script_output(stdout, stderr, show_stdout=True)
+            with col_skipped:
+                st.metric(
+                    "Duplicates Skipped",
+                    fetch_stats['skipped'],
+                    help="Articles already in database"
+                )
 
-            # Refresh page to show updated stats
-            if fetch_stats['inserted'] > 0:
-                st.info("📊 Database stats updated! Refresh the page to see the latest numbers.")
-                st.balloons()
-
-        else:
-            st.error("❌ Fetch failed!")
-            st.markdown("**Error details:**")
-            display_script_output(stdout, stderr)
+        # Refresh page to show updated stats
+        if fetch_stats['inserted'] > 0:
+            st.info("📊 Database stats updated! Refresh the page to see the latest numbers.")
+            st.balloons()
 
 st.markdown("---")
 

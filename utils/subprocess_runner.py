@@ -6,7 +6,9 @@ Provides safe execution of pipeline scripts with error handling
 import subprocess
 import sys
 import streamlit as st
-from typing import Tuple, Optional, List
+import time
+import re
+from typing import Tuple, Optional, List, Dict, Any
 
 
 def run_pipeline_script(
@@ -72,6 +74,230 @@ def run_pipeline_script(
     except Exception as e:
         error_msg = f"Error running script: {str(e)}"
         return False, "", error_msg
+
+
+def run_pipeline_script_streaming(
+    script_name: str,
+    args: Optional[List[str]] = None,
+    timeout: int = 600
+) -> Tuple[bool, str, str]:
+    """
+    Run a pipeline script with real-time streaming output for better observability.
+
+    Shows live progress updates in the Streamlit UI as the script executes.
+
+    Args:
+        script_name: Name of script (e.g., "fetch.py")
+        args: List of command line arguments (optional)
+        timeout: Timeout in seconds (default: 600 = 10 minutes)
+
+    Returns:
+        Tuple of (success: bool, stdout: str, stderr: str)
+
+    Features:
+        - Real-time output streaming
+        - Progress tracking with status indicators
+        - Live log display
+        - Error highlighting
+        - Timeout handling
+    """
+    # Build command
+    cmd = [sys.executable, script_name]
+    if args:
+        cmd.extend(args)
+
+    # Pass Streamlit secrets as environment variables
+    import os
+    env = os.environ.copy()
+    if hasattr(st, 'secrets'):
+        for key, value in st.secrets.items():
+            if isinstance(value, str):
+                env[key] = value
+
+    # Create containers for live updates
+    status_container = st.container()
+    progress_container = st.container()
+    log_container = st.container()
+
+    stdout_lines = []
+    stderr_lines = []
+
+    try:
+        # Start process with pipes for real-time output
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,  # Line buffered
+            env=env,
+            universal_newlines=True
+        )
+
+        start_time = time.time()
+
+        # Progress tracking variables
+        current_status = "Starting..."
+        articles_processed = 0
+        total_articles = 0
+        errors_count = 0
+
+        # Create status display
+        with status_container:
+            status_text = st.empty()
+            status_text.info(f"⚙️ {current_status}")
+
+        # Create progress bar (initially hidden)
+        with progress_container:
+            progress_bar = st.empty()
+            progress_text = st.empty()
+
+        # Create live log display
+        with log_container:
+            st.markdown("### 📋 Live Output")
+            log_display = st.empty()
+
+        # Read output in real-time
+        while True:
+            # Check timeout
+            if time.time() - start_time > timeout:
+                process.kill()
+                return False, '\n'.join(stdout_lines), "Process timed out"
+
+            # Read stdout line
+            line = process.stdout.readline()
+
+            if line:
+                stdout_lines.append(line.rstrip())
+
+                # Parse progress indicators
+                progress_info = parse_progress_line(line)
+                if progress_info:
+                    if 'status' in progress_info:
+                        current_status = progress_info['status']
+                        status_text.info(f"⚙️ {current_status}")
+
+                    if 'current' in progress_info and 'total' in progress_info:
+                        articles_processed = progress_info['current']
+                        total_articles = progress_info['total']
+
+                        # Update progress bar
+                        if total_articles > 0:
+                            progress_pct = articles_processed / total_articles
+                            progress_bar.progress(progress_pct)
+                            progress_text.text(f"Progress: {articles_processed}/{total_articles} ({progress_pct*100:.0f}%)")
+
+                    if 'error' in progress_info:
+                        errors_count += 1
+
+                # Update log display (last 20 lines)
+                recent_logs = stdout_lines[-20:]
+                log_text = format_log_lines(recent_logs)
+                log_display.code(log_text, language="text")
+
+            # Check if process finished
+            if process.poll() is not None:
+                break
+
+        # Read any remaining output
+        remaining_out, remaining_err = process.communicate()
+        if remaining_out:
+            stdout_lines.extend(remaining_out.splitlines())
+        if remaining_err:
+            stderr_lines.extend(remaining_err.splitlines())
+
+        # Final status update
+        success = process.returncode == 0
+
+        with status_container:
+            if success:
+                status_text.success(f"✅ Completed successfully! ({len(stdout_lines)} lines processed)")
+                if errors_count > 0:
+                    st.warning(f"⚠️ Completed with {errors_count} errors")
+            else:
+                status_text.error(f"❌ Failed with return code {process.returncode}")
+
+        # Show full output in expander
+        if stdout_lines:
+            with st.expander("📄 Full Output Log", expanded=False):
+                st.code('\n'.join(stdout_lines), language="text")
+
+        if stderr_lines:
+            with st.expander("⚠️ Error Log", expanded=True):
+                st.code('\n'.join(stderr_lines), language="text")
+
+        return success, '\n'.join(stdout_lines), '\n'.join(stderr_lines)
+
+    except Exception as e:
+        error_msg = f"Error running script: {str(e)}"
+        with status_container:
+            st.error(f"❌ {error_msg}")
+        return False, '\n'.join(stdout_lines), error_msg
+
+
+def parse_progress_line(line: str) -> Optional[Dict[str, Any]]:
+    """
+    Parse a log line to extract progress information.
+
+    Recognizes patterns like:
+    - "Processing 5/60 articles"
+    - "Processing: Article Title"
+    - "✓ Success" / "✗ Failed"
+    - Progress bars from tqdm
+    """
+    info = {}
+
+    # Extract progress from "X/Y" pattern
+    match = re.search(r'(\d+)/(\d+)', line)
+    if match:
+        info['current'] = int(match.group(1))
+        info['total'] = int(match.group(2))
+
+    # Extract status from "Processing:" lines
+    if 'Processing:' in line or 'Processing ' in line:
+        # Extract article title or description
+        parts = line.split('Processing:', 1)
+        if len(parts) > 1:
+            info['status'] = f"Processing: {parts[1].strip()[:60]}..."
+        else:
+            info['status'] = "Processing..."
+
+    # Detect errors
+    if '✗' in line or 'ERROR' in line or 'Failed' in line:
+        info['error'] = True
+
+    # Detect success
+    if '✓' in line or 'success' in line.lower():
+        info['success'] = True
+
+    # Extract from fetching messages
+    if 'Fetching' in line:
+        info['status'] = line.strip()
+
+    # Extract from generation messages
+    if 'Generating' in line or 'Synthesizing' in line:
+        info['status'] = line.strip()
+
+    return info if info else None
+
+
+def format_log_lines(lines: List[str]) -> str:
+    """
+    Format log lines with highlighting for errors and successes.
+    """
+    formatted = []
+    for line in lines:
+        # Highlight errors
+        if '✗' in line or 'ERROR' in line:
+            formatted.append(f"❌ {line}")
+        # Highlight successes
+        elif '✓' in line:
+            formatted.append(f"✅ {line}")
+        # Normal line
+        else:
+            formatted.append(f"   {line}")
+
+    return '\n'.join(formatted)
 
 
 def display_script_output(stdout: str, stderr: str, show_stdout: bool = True):

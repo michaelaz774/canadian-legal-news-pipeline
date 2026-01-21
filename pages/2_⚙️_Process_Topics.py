@@ -5,7 +5,7 @@ Extracts topics from unprocessed articles using Gemini AI
 
 import streamlit as st
 from database import Database
-from utils.subprocess_runner import run_pipeline_script, display_script_output, parse_compile_output
+from utils.subprocess_runner import run_pipeline_script_streaming, parse_compile_output
 from utils.auth import check_password
 
 st.set_page_config(page_title="Process Topics", page_icon="⚙️", layout="wide")
@@ -165,43 +165,39 @@ try:
         """)
 
         if st.button("⚙️ Process All Unprocessed Articles", type="primary", use_container_width=True):
-            with st.spinner(f"Processing {unprocessed} articles... This may take several minutes."):
-                # Run compile.py with longer timeout
-                success, stdout, stderr = run_pipeline_script("compile.py", timeout=1800)
+            st.markdown(f"### 🔄 Processing {unprocessed} Articles")
+            st.markdown("Watch the live progress below. This may take several minutes.")
+            st.markdown("---")
 
-                if success:
-                    st.success("✅ Processing completed successfully!")
+            # Run compile.py with real-time streaming output
+            success, stdout, stderr = run_pipeline_script_streaming("compile.py", timeout=1800)
 
-                    # Parse output to show statistics
-                    compile_stats = parse_compile_output(stdout)
+            if success:
+                st.markdown("---")
 
-                    if compile_stats['processed_count'] > 0 or compile_stats['topics_created'] > 0:
-                        col_processed, col_topics = st.columns(2)
+                # Parse output to show statistics
+                compile_stats = parse_compile_output(stdout)
 
-                        with col_processed:
-                            st.metric(
-                                "Articles Processed",
-                                compile_stats['processed_count'],
-                                help="Articles analyzed for topics"
-                            )
+                if compile_stats['processed_count'] > 0 or compile_stats['topics_created'] > 0:
+                    st.markdown("### 📊 Processing Results")
+                    col_processed, col_topics = st.columns(2)
 
-                        with col_topics:
-                            st.metric(
-                                "Topics Created",
-                                compile_stats['topics_created'],
-                                help="New unique topics added to database"
-                            )
+                    with col_processed:
+                        st.metric(
+                            "Articles Processed",
+                            compile_stats['processed_count'],
+                            help="Articles analyzed for topics"
+                        )
 
-                    # Display full output
-                    display_script_output(stdout, stderr, show_stdout=True)
+                    with col_topics:
+                        st.metric(
+                            "Topics Created",
+                            compile_stats['topics_created'],
+                            help="New unique topics added to database"
+                        )
 
-                    st.info("📊 Database stats updated! Refresh the page to see the latest numbers.")
-                    st.balloons()
-
-                else:
-                    st.error("❌ Processing failed!")
-                    st.markdown("**Error details:**")
-                    display_script_output(stdout, stderr)
+                st.info("📊 Database stats updated! Refresh the page to see the latest numbers.")
+                st.balloons()
 
 except Exception as e:
     st.error(f"Error: {e}")

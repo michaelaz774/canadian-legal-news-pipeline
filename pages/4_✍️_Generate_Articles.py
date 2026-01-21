@@ -5,7 +5,7 @@ AI-powered article generation with multiple generation modes
 
 import streamlit as st
 from database import Database
-from utils.subprocess_runner import run_pipeline_script, display_script_output, parse_generate_output
+from utils.subprocess_runner import run_pipeline_script_streaming, parse_generate_output
 from utils.auth import check_password
 import os
 
@@ -114,7 +114,7 @@ with tab1:
                 st.info(f"Running generate.py with arguments: {' '.join(args)}")
 
                 # Run generate.py
-                success, stdout, stderr = run_pipeline_script("generate.py", args=args, timeout=600)
+                success, stdout, stderr = run_pipeline_script_streaming("generate.py", args=args, timeout=600)
 
                 if success:
                     st.success("✅ Article generated successfully!")
@@ -330,7 +330,7 @@ with tab2:
 
                         # Run generation
                         args = ['--topic', str(topic_id), '--model', model_multi]
-                        success, stdout, stderr = run_pipeline_script("generate.py", args=args, timeout=600)
+                        success, stdout, stderr = run_pipeline_script_streaming("generate.py", args=args, timeout=600)
 
                         if success:
                             success_count += 1
@@ -561,7 +561,7 @@ with tab3:
                                     '--custom-articles', temp_file
                                 ]
 
-                                success, stdout, stderr = run_pipeline_script("generate.py", args=args, timeout=600)
+                                success, stdout, stderr = run_pipeline_script_streaming("generate.py", args=args, timeout=600)
 
                                 # Clean up temp file
                                 import os
@@ -719,7 +719,7 @@ with tab4:
 
                     # Run generation
                     args = ['--topic', str(topic_id), '--model', model_auto]
-                    success, stdout, stderr = run_pipeline_script("generate.py", args=args, timeout=600)
+                    success, stdout, stderr = run_pipeline_script_streaming("generate.py", args=args, timeout=600)
 
                     if success:
                         success_count += 1
