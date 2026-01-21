@@ -83,9 +83,7 @@ def run_pipeline_script_streaming(
     timeout: int = 600
 ) -> Tuple[bool, str, str]:
     """
-    Run a pipeline script with better observability using st.status().
-
-    Shows progress updates in the Streamlit UI as the script executes.
+    Run a pipeline script with progress indication.
 
     Args:
         script_name: Name of script (e.g., "fetch.py")
@@ -110,8 +108,18 @@ def run_pipeline_script_streaming(
             if isinstance(value, str):
                 env[key] = value
 
-    # Use st.status for better UX
-    with st.status("Running pipeline...", expanded=True) as status:
+    # Estimate time based on script
+    if 'fetch' in script_name:
+        estimated_time = "30-60 seconds"
+    elif 'compile' in script_name:
+        estimated_time = "2-5 minutes"
+    elif 'generate' in script_name:
+        estimated_time = "1-3 minutes"
+    else:
+        estimated_time = "a few minutes"
+
+    # Show helpful spinner message
+    with st.spinner(f"⏳ Running {script_name}... This typically takes {estimated_time}. Please wait."):
         try:
             # Run the script and capture output
             result = subprocess.run(
@@ -126,56 +134,59 @@ def run_pipeline_script_streaming(
             stderr = result.stderr
             success = result.returncode == 0
 
-            # Parse and display progress
-            if stdout:
-                lines = stdout.split('\n')
-
-                # Extract key information
-                progress_info = {}
-                for line in lines:
-                    info = parse_progress_line(line)
-                    if info:
-                        progress_info.update(info)
-
-                # Show progress if available
-                if 'current' in progress_info and 'total' in progress_info:
-                    st.write(f"Processed {progress_info['current']} of {progress_info['total']} items")
-
-                # Show recent activity (last 10 lines with content)
-                recent_lines = [l for l in lines[-15:] if l.strip()]
-                if recent_lines:
-                    st.text("Recent activity:")
-                    for line in recent_lines[-10:]:
-                        if '✓' in line or 'success' in line.lower():
-                            st.success(line[:100])
-                        elif '✗' in line or 'ERROR' in line or 'Failed' in line:
-                            st.error(line[:100])
-                        else:
-                            st.text(line[:100])
-
-            # Update final status
-            if success:
-                status.update(label="✅ Completed successfully!", state="complete")
-            else:
-                status.update(label="❌ Process failed", state="error")
-                if stderr:
-                    st.error("Error details:")
-                    st.code(stderr[:500], language="text")
-
         except subprocess.TimeoutExpired:
-            status.update(label="⏱️ Process timed out", state="error")
+            st.error(f"⏱️ Process timed out after {timeout} seconds")
             return False, "", f"Script timed out after {timeout} seconds"
         except Exception as e:
-            status.update(label=f"❌ Error: {str(e)}", state="error")
+            st.error(f"❌ Error running script: {str(e)}")
             return False, "", str(e)
+
+    # Show results after completion
+    if success:
+        st.success("✅ Completed successfully!")
+
+        # Parse and display summary
+        if stdout:
+            lines = stdout.split('\n')
+
+            # Extract key information
+            progress_info = {}
+            for line in lines:
+                info = parse_progress_line(line)
+                if info:
+                    progress_info.update(info)
+
+            # Show summary metrics
+            if 'current' in progress_info and 'total' in progress_info:
+                st.info(f"📊 Processed {progress_info['current']} of {progress_info['total']} items")
+
+            # Count successes and errors
+            success_count = sum(1 for line in lines if '✓' in line or 'success' in line.lower())
+            error_count = sum(1 for line in lines if '✗' in line or 'ERROR' in line or 'Failed' in line)
+
+            if success_count > 0 or error_count > 0:
+                col1, col2 = st.columns(2)
+                with col1:
+                    if success_count > 0:
+                        st.metric("Successes", success_count)
+                with col2:
+                    if error_count > 0:
+                        st.metric("Errors", error_count)
+
+    else:
+        st.error("❌ Process failed!")
+        if stderr:
+            st.error("Error details:")
+            with st.expander("Error Log", expanded=True):
+                st.code(stderr, language="text")
 
     # Show full output in expanders
     if stdout:
         with st.expander("📄 Full Output Log", expanded=False):
             st.code(stdout, language="text")
 
-    if stderr:
-        with st.expander("⚠️ Error Log", expanded=False):
+    if stderr and success:
+        with st.expander("⚠️ Warnings", expanded=False):
             st.code(stderr, language="text")
 
     return success, stdout, stderr
