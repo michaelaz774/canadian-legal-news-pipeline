@@ -152,7 +152,9 @@ def initialize_claude_client() -> Anthropic:
     # CREATE CLIENT
     client = Anthropic(api_key=api_key)
 
-    logger.info("Claude AI client initialized successfully")
+    msg = "Claude AI client initialized successfully"
+    logger.info(msg)
+    print(f"✓ {msg}", flush=True)
     return client
 
 
@@ -264,8 +266,15 @@ Write the synthesized article now. Output in Markdown format with clear headings
 Begin with the article title as # heading, then write the full article."""
 
     # CALL CLAUDE API
-    logger.info(f"Sending {len(articles)} articles to Claude for synthesis...")
-    logger.info(f"Using model: {model}")
+    msg = f"Sending {len(articles)} articles to Claude for synthesis..."
+    logger.info(msg)
+    print(msg, flush=True)
+
+    msg = f"Using model: {model}"
+    logger.info(msg)
+    print(msg, flush=True)
+
+    print("⏳ Calling Claude API (this may take 30-60 seconds)...", flush=True)
 
     response = client.messages.create(
         model=model,
@@ -283,9 +292,17 @@ Begin with the article title as # heading, then write the full article."""
     input_tokens = response.usage.input_tokens
     output_tokens = response.usage.output_tokens
 
-    logger.info(f"✓ Article generated successfully")
-    logger.info(f"  Input tokens: {input_tokens:,}")
-    logger.info(f"  Output tokens: {output_tokens:,}")
+    msg = "✓ Article generated successfully"
+    logger.info(msg)
+    print(msg, flush=True)
+
+    msg = f"  Input tokens: {input_tokens:,}"
+    logger.info(msg)
+    print(msg, flush=True)
+
+    msg = f"  Output tokens: {output_tokens:,}"
+    logger.info(msg)
+    print(msg, flush=True)
 
     # CALCULATE COST
     # Pricing as of January 2026
@@ -300,7 +317,9 @@ Begin with the article title as # heading, then write the full article."""
         output_cost = 0
 
     total_cost = input_cost + output_cost
-    logger.info(f"  Estimated cost: ${total_cost:.4f}")
+    msg = f"  Estimated cost: ${total_cost:.4f}"
+    logger.info(msg)
+    print(msg, flush=True)
 
     return generated_content
 
@@ -400,11 +419,17 @@ sources:
     full_content = metadata + content
 
     # WRITE TO FILE
+    print(f"Saving article to file...", flush=True)
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(full_content)
 
-    logger.info(f"✓ Article saved to: {filepath}")
-    logger.info(f"  Word count: {word_count:,}")
+    msg = f"✓ Article saved to: {filepath}"
+    logger.info(msg)
+    print(msg, flush=True)
+
+    msg = f"  Word count: {word_count:,}"
+    logger.info(msg)
+    print(msg, flush=True)
 
     return filepath
 
@@ -576,28 +601,43 @@ def generate_article_for_topic(
         return generate_article_for_topics(db, client, subtopic_ids, model, combined_title=topic_name)
 
     # HANDLE REGULAR SUBTOPICS
-    logger.info(f"Generating article for topic: {topic_name} (ID: {topic_id})")
+    msg = f"Generating article for topic: {topic_name} (ID: {topic_id})"
+    logger.info(msg)
+    print(msg, flush=True)
 
     # FETCH ARTICLES FOR TOPIC
+    msg = f"Fetching articles from database..."
+    print(msg, flush=True)
     articles = db.get_articles_for_topic(topic_id)
 
     if not articles:
-        logger.error(f"No articles found for topic '{topic_name}'")
+        msg = f"No articles found for topic '{topic_name}'"
+        logger.error(msg)
+        print(f"❌ {msg}", flush=True)
         return None
 
-    logger.info(f"Found {len(articles)} source articles")
+    msg = f"Found {len(articles)} source articles"
+    logger.info(msg)
+    print(f"✓ {msg}", flush=True)
 
     # VALIDATE ARTICLE QUALITY
     # Check that articles have substantial content
+    print("Validating article content quality...", flush=True)
     articles_with_content = [a for a in articles if a.get('content') and len(a['content']) > 100]
 
     if not articles_with_content:
-        logger.error(f"No articles with substantial content for topic '{topic_name}'")
+        msg = f"No articles with substantial content for topic '{topic_name}'"
+        logger.error(msg)
+        print(f"❌ {msg}", flush=True)
         return None
 
     if len(articles_with_content) < len(articles):
-        logger.warning(f"Only {len(articles_with_content)}/{len(articles)} articles have substantial content")
+        msg = f"Only {len(articles_with_content)}/{len(articles)} articles have substantial content"
+        logger.warning(msg)
+        print(f"⚠️  {msg}", flush=True)
         articles = articles_with_content
+    else:
+        print(f"✓ All {len(articles)} articles have substantial content", flush=True)
 
     # SYNTHESIZE WITH CLAUDE
     try:
